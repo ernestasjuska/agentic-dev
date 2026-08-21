@@ -1,0 +1,5 @@
+# agent-local state
+.claude/settings.local.json
+
+# sync destinations, not sources
+.claude/skills/
