@@ -10,9 +10,26 @@ Works with Claude Code, Codex CLI, GitHub Copilot and OpenCode. All four read th
 
 ```
 skills/<name>/SKILL.md    one skill per directory, the single source of truth
+rules/*.instructions.md   always-on agent rules, junctioned into ~/.claude/rules
 scripts/sync.ps1          copies handpicked skills into a project or your user profile
 CLAUDE.md                 canonical repo guide (AGENTS.md + copilot-instructions point to it)
 ```
+
+## Rules
+
+Skills load when an agent decides it needs one. `rules/` is the other kind: always-on
+behaviour, loaded into every session in every repo.
+
+These are not synced. Point the machine at the repo once:
+
+```powershell
+New-Item -ItemType Junction -Path $HOME\.claude\rules `
+         -Target C:\My\Git\github.com\ernestasjuska\agentic-dev\rules
+```
+
+Claude Code reads `~/.claude/rules` as user-level rules. VS Code lists the same path in
+`chat.instructionsFilesLocations` by default, so Copilot reads it too. One folder, one copy,
+both agents, no drift. A junction needs no elevation. Run it again on each new machine.
 
 ## Use it from another project
 

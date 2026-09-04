@@ -6,7 +6,8 @@ Guidance for Claude Code when working in this repository.
 
 A personal library of agent skills and agentic-workflow files, plus a script that copies
 handpicked skills into other projects. There is no application here and nothing to build.
-The deliverable is the content of `skills/` and the correctness of `scripts/sync.ps1`.
+The deliverable is the content of `skills/`, the content of `rules/`, and the correctness
+of `scripts/sync.ps1`.
 
 The owner uses four agents: Claude Code, Codex CLI, GitHub Copilot, OpenCode.
 
@@ -60,6 +61,28 @@ has no `SKILL.md`. That guard is the only thing standing between a typo'd `-Targ
 someone's real directory. Keep it. Orphans (skill dirs in an agent dir that are not in the
 current selection) are reported, never deleted.
 
+## Rules
+
+`rules/*.instructions.md` are always-loaded behavioural rules, not skills. Skills load on
+demand; these are charged to every session in every repo, so they stay short.
+
+They do not go through `sync.ps1`. There is one copy and it is the one in git:
+
+```powershell
+New-Item -ItemType Junction -Path ~\.claude\rules -Target <repo>\rules
+```
+
+`~/.claude/rules` is Claude Code's user-level rules directory and a default entry in VS
+Code's `chat.instructionsFilesLocations`, so Claude Code and Copilot both read this
+directory live. Nothing to sync, nothing that can drift. Editing a rule is a commit here.
+
+The `.instructions.md` suffix and `applyTo` frontmatter are what Copilot needs to apply a
+file automatically. Claude Code reads every `.md` under the directory and loads any rule
+without a `paths` key unconditionally. Keep both so one file serves both agents.
+
+A junction needs no elevation on Windows, unlike a symlink. Recreate it per machine; it is
+not something the repo can carry.
+
 ## Authoring conventions
 
 `skills/skill-authoring/SKILL.md` is the canonical, enforced contract. Read it before
@@ -86,4 +109,6 @@ machine-specific paths, no secrets, and no agent-specific tool names or frontmat
 
 `CLAUDE.md` is canonical. `AGENTS.md` (read by Codex CLI and OpenCode) and
 `.github/copilot-instructions.md` (Copilot) are thin pointers to it. When repo structure or
-commands change, update this file and check those two still tell the truth.
+commands change, update this file and check those two still tell the truth. Those three
+files describe this repo. `rules/` is different: it ships behaviour to every repo on the
+machine, so nothing repo-specific belongs in it.
