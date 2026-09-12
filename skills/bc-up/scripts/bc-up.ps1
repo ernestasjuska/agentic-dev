@@ -118,6 +118,13 @@ $cfg['BC_WEBCLIENT_PUBLIC_URL']      = "https://$($cfg['PUBLIC_HOST'])/$Name/"
 $cfg['BC_WEBCLIENT_PUBLIC_HOST']     = $cfg['PUBLIC_HOST']
 $cfg['BC_WEBCLIENT_HTTPS_PFX']       = $HttpsPfx
 $cfg['BC_WEBCLIENT_FORWARDED_HEADERS'] = '0'
+# Placeholder credentials for Basic auth against the OData, API and dev
+# endpoints. The service tier runs NavUserPassword, so these work at every
+# web-services surface; the web client signs in through Entra separately.
+# Set them in the instance manifest to override; a value already there
+# wins over this default.
+if (-not $cfg['BC_SERVER_USERNAME']) { $cfg['BC_SERVER_USERNAME'] = 'user' }
+if (-not $cfg['BC_SERVER_PASSWORD']) { $cfg['BC_SERVER_PASSWORD'] = 'Password1.' }
 
 $cfg.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } | Set-Content -Path $manifest
 
