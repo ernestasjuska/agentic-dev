@@ -1,6 +1,6 @@
 ---
 name: agent-authorship
-description: Identify AI-authored GitHub issues, pull requests, reviews, and comments with the agent name and model. Use whenever an agent creates, edits, or submits repository-hosting content on the user's behalf. Not for commit messages, code comments, or chat replies.
+description: Add an agent-and-model footer to GitHub issue bodies, pull-request bodies, reviews, and comments. Use before creating, submitting, or materially editing any of those messages on the user's behalf. Do not use for commit messages, code comments, or chat replies.
 ---
 
 # Identify agent-authored repository messages
