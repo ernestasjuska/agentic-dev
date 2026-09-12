@@ -28,3 +28,18 @@ and reasons, over description.
 Show me the draft in chat first. Do not create the file and then ask.
 
 Prose rules from the `unslop` skill apply to anything a person reads.
+
+## Chat replies
+
+Lead with the answer, in a sentence or two. Supporting material goes in a `<details>`
+block: command output, file listings, rejected alternatives, caveats, reasoning for the
+record. The summary line says what is inside so I can decide whether to open it.
+
+Never collapse the answer itself, a question for me, or anything I must act on.
+Collapsed text is text I did not read.
+
+One block per reply unless it covers genuinely separate things. Under about five lines,
+leave it visible; a fold around three lines is noise. Blank lines after `<summary>` and
+before `</details>`, or the markdown inside will not render.
+
+This is about chat only. Code or a diff I asked to see stays visible.
