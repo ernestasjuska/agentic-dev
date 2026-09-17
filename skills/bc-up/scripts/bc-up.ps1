@@ -40,6 +40,9 @@ param(
     [string]$AadUserUpn,
     [string]$HttpsPfx = '/certs/bc.pfx',
     [string]$HttpsPfxPassword,
+    # Add a second web client on NavUserPassword at /<name>dev, for agents
+    # that have no Entra account. The main one keeps whatever sign-in it had.
+    [switch]$AgentWebClient,
     [switch]$Json
 )
 
@@ -118,6 +121,11 @@ $cfg['BC_WEBCLIENT_PUBLIC_URL']      = "https://$($cfg['PUBLIC_HOST'])/$Name/"
 $cfg['BC_WEBCLIENT_PUBLIC_HOST']     = $cfg['PUBLIC_HOST']
 $cfg['BC_WEBCLIENT_HTTPS_PFX']       = $HttpsPfx
 $cfg['BC_WEBCLIENT_FORWARDED_HEADERS'] = '0'
+if ($AgentWebClient) {
+    $cfg['BC_WEBCLIENT_AGENT']          = '1'
+    $cfg['BC_WEBCLIENT_AGENT_PORT']     = '8081'
+    $cfg['BC_WEBCLIENT_AGENT_PATHBASE'] = "/${Name}dev"
+}
 # Placeholder credentials for Basic auth against the OData, API and dev
 # endpoints. The service tier runs NavUserPassword, so these work at every
 # web-services surface; the web client signs in through Entra separately.
@@ -152,6 +160,26 @@ $svc.Remove('profiles')
 $svc['container_name'] = "bc-$Name"
 $svc['restart'] = 'unless-stopped'
 $svc['networks'] = @{ $network = $null; default = $null }
+# Run the repo's scripts rather than the copy baked into the image, so editing
+# entrypoint.sh or start-webclient.sh takes effect on the next container start
+# instead of on the next `docker compose build`.
+$svc['volumes'] += @{
+    type      = 'bind'
+    source    = (Join-Path $cfg['BC_ON_LINUX_DIR'] 'scripts')
+    target    = '/bc/scripts'
+    read_only = $true
+    bind      = @{}
+}
+
+# A path base served by UsePathBase has no trailing-slash redirect of its own,
+# the way an IIS virtual directory does. Without one the browser can sit on
+# /<name> and the web client's client-side navigation concatenates to
+# /<name>SignIn. The public host is written out rather than captured from the
+# request, because a devtunnel relay rewrites Host to localhost before the
+# proxy sees it.
+$slashRegex = '^[a-z]+://[^/]+/{0}(\?.*)?$' -f $Name
+$slashTo    = 'https://{0}/{1}/${{1}}' -f $cfg['PUBLIC_HOST'], $Name
+
 $svc['labels'] = @{
     'traefik.enable'                                                    = 'true'
     "traefik.http.routers.$Name.rule"                                   = "PathPrefix(``/$Name``)"
@@ -162,7 +190,43 @@ $svc['labels'] = @{
     "traefik.http.services.$Name.loadbalancer.server.scheme"            = 'https'
     "traefik.http.services.$Name.loadbalancer.serverstransport"         = 'bc-transport@file'
     "traefik.http.services.$Name.loadbalancer.passhostheader"           = 'true'
+    "traefik.http.routers.$Name.priority"                               = '100'
+    "traefik.http.middlewares.$Name-slash.redirectregex.regex"          = $slashRegex
+    "traefik.http.middlewares.$Name-slash.redirectregex.replacement"    = $slashTo
+    "traefik.http.routers.$Name-slash.rule"                             = "Path(``/$Name``)"
+    "traefik.http.routers.$Name-slash.priority"                         = '200'
+    "traefik.http.routers.$Name-slash.entrypoints"                      = 'web'
+    "traefik.http.routers.$Name-slash.middlewares"                      = "$Name-slash"
+    "traefik.http.routers.$Name-slash.service"                          = $Name
     'bc.instance'                                                       = $Name
+}
+
+# The agent web client is a second front end on the same container, so it is a
+# second router and service rather than a second instance. Its prefix is longer
+# than the main one's and would win on rule length alone; the priorities are
+# explicit so that stays true if either rule changes.
+if ($AgentWebClient) {
+    $agent           = "${Name}dev"
+    $agentSlashRegex = '^[a-z]+://[^/]+/{0}(\?.*)?$' -f $agent
+    $agentSlashTo    = 'https://{0}/{1}/${{1}}' -f $cfg['PUBLIC_HOST'], $agent
+    $svc['labels'] += @{
+        "traefik.http.routers.$agent.rule"                            = "PathPrefix(``/$agent``)"
+        "traefik.http.routers.$agent.priority"                        = '150'
+        "traefik.http.routers.$agent.entrypoints"                     = 'web'
+        "traefik.http.routers.$agent.service"                         = $agent
+        "traefik.http.routers.$agent.middlewares"                     = 'publichost@file'
+        "traefik.http.services.$agent.loadbalancer.server.port"       = $cfg['BC_WEBCLIENT_AGENT_PORT']
+        "traefik.http.services.$agent.loadbalancer.server.scheme"     = 'https'
+        "traefik.http.services.$agent.loadbalancer.serverstransport"  = 'bc-transport@file'
+        "traefik.http.services.$agent.loadbalancer.passhostheader"    = 'true'
+        "traefik.http.middlewares.$agent-slash.redirectregex.regex"       = $agentSlashRegex
+        "traefik.http.middlewares.$agent-slash.redirectregex.replacement" = $agentSlashTo
+        "traefik.http.routers.$agent-slash.rule"                      = "Path(``/$agent``)"
+        "traefik.http.routers.$agent-slash.priority"                  = '250'
+        "traefik.http.routers.$agent-slash.entrypoints"               = 'web'
+        "traefik.http.routers.$agent-slash.middlewares"               = "$agent-slash"
+        "traefik.http.routers.$agent-slash.service"                   = $agent
+    }
 }
 
 # Named volumes: the artifact cache is shared across instances because it is a
