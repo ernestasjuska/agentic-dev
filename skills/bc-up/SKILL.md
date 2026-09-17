@@ -34,6 +34,7 @@ them:
 | `-AadAppId`, `-AadTenantId`, `-AadUserUpn` | only for Entra sign-in | `-AadUserUpn` must be the **token's email claim**, not the directory UPN. |
 | `-HttpsPfxPassword` | if the backend serves TLS | Defaults to the `/certs/bc.pfx` mounted from the cert directory. |
 | `-AgentWebClient` | to let an agent drive the UI | Adds a second web client at `/<name>dev` on NavUserPassword. |
+| `-AppsDir` | to publish your own apps at boot | Directory of `.app` files, mounted read-only. Re-run to pick up new files. |
 
 Later runs need only the name.
 

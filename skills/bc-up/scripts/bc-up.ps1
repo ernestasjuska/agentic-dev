@@ -43,6 +43,9 @@ param(
     # Add a second web client on NavUserPassword at /<name>dev, for agents
     # that have no Entra account. The main one keeps whatever sign-in it had.
     [switch]$AgentWebClient,
+    # Directory of .app files to publish on every boot. Re-run to pick up
+    # files added since.
+    [string]$AppsDir,
     [switch]$Json
 )
 
@@ -82,6 +85,10 @@ if ($AadTenantId)      { $cfg['BC_AAD_TENANT_ID'] = $AadTenantId }
 if ($AadUserUpn)       { $cfg['BC_AAD_USER_UPN'] = $AadUserUpn }
 if ($HttpsPfxPassword) { $cfg['BC_WEBCLIENT_HTTPS_PFX_PASSWORD'] = $HttpsPfxPassword }
 
+# The proxy is authoritative: it serves the URL that actually resolves, so a
+# host remembered in the manifest is stale the moment the tunnel is repointed.
+# An explicit -PublicHost still wins, having been applied to $cfg above.
+if ($traefikEnv['PUBLIC_HOST'] -and -not $PublicHost) { $cfg['PUBLIC_HOST'] = $traefikEnv['PUBLIC_HOST'] }
 if (-not $cfg['PUBLIC_HOST'] -and $traefikEnv['PUBLIC_HOST']) { $cfg['PUBLIC_HOST'] = $traefikEnv['PUBLIC_HOST'] }
 if (-not $cfg['SA_PASSWORD'] -and $sqlEnv['SA_PASSWORD'])     { $cfg['SA_PASSWORD'] = $sqlEnv['SA_PASSWORD'] }
 
@@ -121,6 +128,16 @@ $cfg['BC_WEBCLIENT_PUBLIC_URL']      = "https://$($cfg['PUBLIC_HOST'])/$Name/"
 $cfg['BC_WEBCLIENT_PUBLIC_HOST']     = $cfg['PUBLIC_HOST']
 $cfg['BC_WEBCLIENT_HTTPS_PFX']       = $HttpsPfx
 $cfg['BC_WEBCLIENT_FORWARDED_HEADERS'] = '0'
+if ($AppsDir) { $cfg['BC_APPS_DIR'] = (Resolve-Path $AppsDir).Path }
+if ($cfg['BC_APPS_DIR']) {
+    # BC_TEST_APPS is the entrypoint's own hook: a semicolon-separated list it
+    # publishes once the tier is up, after the test framework, so an app that
+    # depends on Library Assert installs cleanly.
+    $appFiles = @(Get-ChildItem -Path $cfg['BC_APPS_DIR'] -Filter *.app -File -ErrorAction SilentlyContinue |
+                  Sort-Object Name | ForEach-Object { "/bc/apps/$($_.Name)" })
+    $cfg['BC_TEST_APPS'] = ($appFiles -join ';')
+}
+
 if ($AgentWebClient) {
     $cfg['BC_WEBCLIENT_AGENT']          = '1'
     $cfg['BC_WEBCLIENT_AGENT_PORT']     = '8081'
@@ -171,6 +188,16 @@ $svc['volumes'] += @{
     bind      = @{}
 }
 
+if ($cfg['BC_APPS_DIR']) {
+    $svc['volumes'] += @{
+        type      = 'bind'
+        source    = $cfg['BC_APPS_DIR']
+        target    = '/bc/apps'
+        read_only = $true
+        bind      = @{}
+    }
+}
+
 # A path base served by UsePathBase has no trailing-slash redirect of its own,
 # the way an IIS virtual directory does. Without one the browser can sit on
 # /<name> and the web client's client-side navigation concatenates to
@@ -178,7 +205,8 @@ $svc['volumes'] += @{
 # request, because a devtunnel relay rewrites Host to localhost before the
 # proxy sees it.
 $slashRegex = '^[a-z]+://[^/]+/{0}(\?.*)?$' -f $Name
-$slashTo    = 'https://{0}/{1}/${{1}}' -f $cfg['PUBLIC_HOST'], $Name
+# $$ survives docker compose's own interpolation and reaches traefik as $1.
+$slashTo    = 'https://{0}/{1}/$${{1}}' -f $cfg['PUBLIC_HOST'], $Name
 
 $svc['labels'] = @{
     'traefik.enable'                                                    = 'true'
@@ -208,7 +236,7 @@ $svc['labels'] = @{
 if ($AgentWebClient) {
     $agent           = "${Name}dev"
     $agentSlashRegex = '^[a-z]+://[^/]+/{0}(\?.*)?$' -f $agent
-    $agentSlashTo    = 'https://{0}/{1}/${{1}}' -f $cfg['PUBLIC_HOST'], $agent
+    $agentSlashTo    = 'https://{0}/{1}/$${{1}}' -f $cfg['PUBLIC_HOST'], $agent
     $svc['labels'] += @{
         "traefik.http.routers.$agent.rule"                            = "PathPrefix(``/$agent``)"
         "traefik.http.routers.$agent.priority"                        = '150'

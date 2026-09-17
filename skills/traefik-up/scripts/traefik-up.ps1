@@ -29,7 +29,8 @@ param(
     [string]$PublicHost,
     # Directory holding ca.crt (and the leaf the backends serve).
     [string]$CertDir,
-    [int]$Port = 8080,
+    # Published port. Remembered after the first run, like -PublicHost.
+    [int]$Port,
     [string]$Image = 'traefik:v3.6',
     [switch]$Dashboard,
     [int]$DashboardPort = 8090,
@@ -53,6 +54,8 @@ function Get-Saved([string]$key) {
 
 if (-not $PublicHost) { $PublicHost = Get-Saved 'PUBLIC_HOST' }
 if (-not $CertDir)    { $CertDir    = Get-Saved 'CERT_DIR' }
+if (-not $Port)       { $Port       = [int](Get-Saved 'TRAEFIK_PORT') }
+if (-not $Port)       { $Port       = 8080 }
 if (-not $PublicHost) { throw "No -PublicHost. Pass it on first run; later runs read it from $envFile." }
 if (-not $CertDir)    { throw "No -CertDir. It must contain ca.crt used to validate backends." }
 
