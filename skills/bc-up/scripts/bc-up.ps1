@@ -257,13 +257,18 @@ if ($AgentWebClient) {
     }
 }
 
-# Named volumes: the artifact cache is shared across instances because it is a
-# read-only download cache and re-fetching it per instance costs gigabytes. The
-# service and assembly-cache volumes stay project-scoped so instances stay
-# independent.
-$volumes = @{ 'bc-artifacts' = @{ external = $true; name = 'bc-artifacts' } }
+# Named volumes: the artifact cache is shared, but only between instances of the
+# same BC version. The entrypoint wipes the cache whenever it does not match the
+# version it was asked for, so one shared volume means a second instance on a
+# different version silently destroys the first one's artifacts. Keying the volume
+# by version keeps the sharing where it pays and stops the collision.
+$artifactVolume = if ($cfg['BC_VERSION']) { "bc-artifacts-$($cfg['BC_VERSION'])" } else { 'bc-artifacts' }
+$volumes = @{ $artifactVolume = @{ external = $true; name = $artifactVolume } }
 foreach ($v in @($svc.volumes | Where-Object { $_.type -eq 'volume' })) {
-    if ($v.source -ne 'bc-artifacts') { $volumes[$v.source] = @{} }
+    if ($v.source -eq 'bc-artifacts') { $v.source = $artifactVolume } else { $volumes[$v.source] = @{} }
+}
+if (-not (docker volume ls --format '{{.Name}}' | Where-Object { $_ -eq $artifactVolume })) {
+    docker volume create $artifactVolume | Out-Null
 }
 
 $doc = @{
