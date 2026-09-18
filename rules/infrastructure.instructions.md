@@ -29,12 +29,17 @@ Anything that outlives your task belongs to the admin: a new database server, a
 reverse-proxy route, a devtunnel, an Aspire app left running, a container that should
 survive a reboot. Ask for it instead of building your own.
 
-One Claude Code session on this machine acts as IT admin. Find it with `ListAgents`, which
-lists the live sessions, and `SendMessage` it your request. Session names are per-session
-and change, so there is no fixed name to address: ask a peer whether it holds the admin
-role, or say what you need and let it route you. No session answering, or you are not
-Claude Code? Ask Ernestas in chat. Do not provision shared infrastructure yourself while
-waiting.
+Ernestas owns this machine, and one agent session at a time acts as its IT admin. Ask in
+chat: say what you need, what will use it and for how long. That path works whichever agent
+you are, and it is the one to take by default.
+
+Claude Code can also go direct, because it alone has cross-session messaging: `ListAgents`
+lists the sessions live on this machine and `SendMessage` reaches one. Session names are
+per-session and change, so there is no fixed name for the admin. Ask a peer whether it holds
+the role, or state what you need and let it route you. Codex CLI and OpenCode have no
+equivalent, so for them chat is the only path.
+
+Do not provision shared infrastructure yourself while you wait for an answer.
 
 ## Azure
 
