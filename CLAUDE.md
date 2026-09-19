@@ -20,6 +20,7 @@ The owner uses four agents: Claude Code, Codex CLI, GitHub Copilot, OpenCode.
 ./scripts/sync.ps1 -Target C:\proj\foo -Check                # report drift/missing/orphans, write nothing (exit 1 on drift)
 ./scripts/sync.ps1 -Target C:\proj\foo -All -Agents claude    # everything, Claude layout only
 ./scripts/sync.ps1 -Global -Skills a                          # into ~/.claude/skills etc. instead of a project
+./scripts/sync.ps1 -Rules                                     # rules/ -> ~/.codex/AGENTS.md (-Check reports drift)
 ```
 
 `-List` is the closest thing to a test suite. Run it after touching any `SKILL.md`.
@@ -66,15 +67,18 @@ current selection) are reported, never deleted.
 `rules/*.instructions.md` are always-loaded behavioural rules, not skills. Skills load on
 demand; these are charged to every session in every repo, so they stay short.
 
-They do not go through `sync.ps1`. There is one copy and it is the one in git:
+Three of the four agents read `rules/` live and cannot drift: Claude Code through a
+`~/.claude/rules` junction, OpenCode through an `instructions` glob in
+`~/.config/opencode/opencode.jsonc`, Copilot because VS Code lists the same directory in
+`chat.instructionsFilesLocations` by default.
 
 ```powershell
 New-Item -ItemType Junction -Path ~\.claude\rules -Target <repo>\rules
 ```
 
-`~/.claude/rules` is Claude Code's user-level rules directory and a default entry in VS
-Code's `chat.instructionsFilesLocations`, so Claude Code and Copilot both read this
-directory live. Nothing to sync, nothing that can drift. Editing a rule is a commit here.
+Codex loads exactly one global file, `~/.codex/AGENTS.md`, and a pointer in it to the
+directory is not reliably followed, so `sync.ps1 -Rules` writes the rule bodies into that
+file. Editing a rule means re-running it; `-Rules -Check` exits 1 when that file is stale.
 
 The `.instructions.md` suffix and `applyTo` frontmatter are what Copilot needs to apply a
 file automatically. Claude Code reads every `.md` under the directory and loads any rule

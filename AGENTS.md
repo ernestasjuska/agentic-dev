@@ -11,6 +11,6 @@ Quick orientation:
   is the check to run after editing a `SKILL.md`.
 - Before adding or changing a skill, read `skills/skill-authoring/SKILL.md`, the portability
   contract these skills must satisfy.
-- `rules/*.instructions.md` are always-on behavioural rules for every repo on this machine,
-  reaching the agents through a `~/.claude/rules` junction rather than through `sync.ps1`.
-  Nothing repo-specific goes in them.
+- `rules/*.instructions.md` are always-on behavioural rules for every repo on this machine.
+  Claude Code, OpenCode and Copilot read the directory live; Codex gets the same text in
+  `~/.codex/AGENTS.md` from `sync.ps1 -Rules`. Nothing repo-specific goes in them.
