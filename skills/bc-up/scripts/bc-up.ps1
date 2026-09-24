@@ -122,6 +122,13 @@ $cfg['BC_WEBCLIENT_HOST_PORT'] = "$($base + 80)"
 
 # --- fixed instance settings ---
 $cfg['SQL_SERVER']                   = 'bc-mssql'
+# Instances share the SQL Server but never a database: each restores its own
+# artifact's backup, so sharing one means the second instance overwrites the first.
+# The first instance keeps the name CRONUS so an existing single-instance setup is
+# left where it is.
+if (-not $cfg['BC_DATABASE']) {
+    $cfg['BC_DATABASE'] = if ($cfg['BC_PORT_BASE'] -eq '7000') { 'CRONUS' } else { "CRONUS_$Name" }
+}
 $cfg['BC_WEBCLIENT']                 = '1'
 $cfg['BC_WEBCLIENT_PATHBASE']        = "/$Name"
 $cfg['BC_WEBCLIENT_PUBLIC_URL']      = "https://$($cfg['PUBLIC_HOST'])/$Name/"
@@ -269,6 +276,22 @@ foreach ($v in @($svc.volumes | Where-Object { $_.type -eq 'volume' })) {
 }
 if (-not (docker volume ls --format '{{.Name}}' | Where-Object { $_ -eq $artifactVolume })) {
     docker volume create $artifactVolume | Out-Null
+}
+
+# RESTORE FROM DISK names a path on the SQL Server, and bc-mssql mounts the one
+# volume called bc-artifacts. An instance on its own per-version volume therefore
+# has no way to hand SQL its backup, and SQL restores whatever is in the shared
+# volume instead - the wrong version, without saying so. Mounting the shared volume
+# read-write as well gives the entrypoint somewhere to stage the backup that SQL
+# can actually read.
+if ($artifactVolume -ne 'bc-artifacts') {
+    $volumes['bc-artifacts'] = @{ external = $true; name = 'bc-artifacts' }
+    $svc['volumes'] += @{
+        type   = 'volume'
+        source = 'bc-artifacts'
+        target = '/bc/shared-artifacts'
+        volume = @{}
+    }
 }
 
 $doc = @{
