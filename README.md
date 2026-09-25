@@ -20,7 +20,7 @@ CLAUDE.md                 canonical repo guide (AGENTS.md + copilot-instructions
 Skills load when an agent decides it needs one. `rules/` is the other kind: always-on
 behaviour, loaded into every session in every repo.
 
-These are not synced. Point the machine at the repo once:
+Point the machine at the repo once:
 
 ```powershell
 New-Item -ItemType Junction -Path $HOME\.claude\rules `
@@ -28,8 +28,13 @@ New-Item -ItemType Junction -Path $HOME\.claude\rules `
 ```
 
 Claude Code reads `~/.claude/rules` as user-level rules. VS Code lists the same path in
-`chat.instructionsFilesLocations` by default, so Copilot reads it too. One folder, one copy,
-both agents, no drift. A junction needs no elevation. Run it again on each new machine.
+`chat.instructionsFilesLocations` by default, so Copilot reads it too, and OpenCode picks
+the directory up through an `instructions` glob in its config. One folder, one copy, no
+drift. A junction needs no elevation. Run it again on each new machine.
+
+Codex is the exception: it loads one global file, so `sync.ps1 -Rules` writes the rule
+bodies into `~/.codex/AGENTS.md`. Re-run it after editing a rule, and use
+`-Rules -Check` (exit code 1 when stale) to catch a forgotten run.
 
 ## Use it from another project
 
