@@ -40,6 +40,12 @@ param(
     [string]$AadUserUpn,
     [string]$HttpsPfx = '/certs/bc.pfx',
     [string]$HttpsPfxPassword,
+    # Add a second web client on NavUserPassword at /<name>dev, for agents
+    # that have no Entra account. The main one keeps whatever sign-in it had.
+    [switch]$AgentWebClient,
+    # Directory of .app files to publish on every boot. Re-run to pick up
+    # files added since.
+    [string]$AppsDir,
     [switch]$Json
 )
 
@@ -79,6 +85,10 @@ if ($AadTenantId)      { $cfg['BC_AAD_TENANT_ID'] = $AadTenantId }
 if ($AadUserUpn)       { $cfg['BC_AAD_USER_UPN'] = $AadUserUpn }
 if ($HttpsPfxPassword) { $cfg['BC_WEBCLIENT_HTTPS_PFX_PASSWORD'] = $HttpsPfxPassword }
 
+# The proxy is authoritative: it serves the URL that actually resolves, so a
+# host remembered in the manifest is stale the moment the tunnel is repointed.
+# An explicit -PublicHost still wins, having been applied to $cfg above.
+if ($traefikEnv['PUBLIC_HOST'] -and -not $PublicHost) { $cfg['PUBLIC_HOST'] = $traefikEnv['PUBLIC_HOST'] }
 if (-not $cfg['PUBLIC_HOST'] -and $traefikEnv['PUBLIC_HOST']) { $cfg['PUBLIC_HOST'] = $traefikEnv['PUBLIC_HOST'] }
 if (-not $cfg['SA_PASSWORD'] -and $sqlEnv['SA_PASSWORD'])     { $cfg['SA_PASSWORD'] = $sqlEnv['SA_PASSWORD'] }
 
@@ -112,12 +122,34 @@ $cfg['BC_WEBCLIENT_HOST_PORT'] = "$($base + 80)"
 
 # --- fixed instance settings ---
 $cfg['SQL_SERVER']                   = 'bc-mssql'
+# Instances share the SQL Server but never a database: each restores its own
+# artifact's backup, so sharing one means the second instance overwrites the first.
+# The first instance keeps the name CRONUS so an existing single-instance setup is
+# left where it is.
+if (-not $cfg['BC_DATABASE']) {
+    $cfg['BC_DATABASE'] = if ($cfg['BC_PORT_BASE'] -eq '7000') { 'CRONUS' } else { "CRONUS_$Name" }
+}
 $cfg['BC_WEBCLIENT']                 = '1'
 $cfg['BC_WEBCLIENT_PATHBASE']        = "/$Name"
 $cfg['BC_WEBCLIENT_PUBLIC_URL']      = "https://$($cfg['PUBLIC_HOST'])/$Name/"
 $cfg['BC_WEBCLIENT_PUBLIC_HOST']     = $cfg['PUBLIC_HOST']
 $cfg['BC_WEBCLIENT_HTTPS_PFX']       = $HttpsPfx
 $cfg['BC_WEBCLIENT_FORWARDED_HEADERS'] = '0'
+if ($AppsDir) { $cfg['BC_APPS_DIR'] = (Resolve-Path $AppsDir).Path }
+if ($cfg['BC_APPS_DIR']) {
+    # BC_TEST_APPS is the entrypoint's own hook: a semicolon-separated list it
+    # publishes once the tier is up, after the test framework, so an app that
+    # depends on Library Assert installs cleanly.
+    $appFiles = @(Get-ChildItem -Path $cfg['BC_APPS_DIR'] -Filter *.app -File -ErrorAction SilentlyContinue |
+                  Sort-Object Name | ForEach-Object { "/bc/apps/$($_.Name)" })
+    $cfg['BC_TEST_APPS'] = ($appFiles -join ';')
+}
+
+if ($AgentWebClient) {
+    $cfg['BC_WEBCLIENT_AGENT']          = '1'
+    $cfg['BC_WEBCLIENT_AGENT_PORT']     = '8081'
+    $cfg['BC_WEBCLIENT_AGENT_PATHBASE'] = "/${Name}dev"
+}
 # Placeholder credentials for Basic auth against the OData, API and dev
 # endpoints. The service tier runs NavUserPassword, so these work at every
 # web-services surface; the web client signs in through Entra separately.
@@ -152,6 +184,37 @@ $svc.Remove('profiles')
 $svc['container_name'] = "bc-$Name"
 $svc['restart'] = 'unless-stopped'
 $svc['networks'] = @{ $network = $null; default = $null }
+# Run the repo's scripts rather than the copy baked into the image, so editing
+# entrypoint.sh or start-webclient.sh takes effect on the next container start
+# instead of on the next `docker compose build`.
+$svc['volumes'] += @{
+    type      = 'bind'
+    source    = (Join-Path $cfg['BC_ON_LINUX_DIR'] 'scripts')
+    target    = '/bc/scripts'
+    read_only = $true
+    bind      = @{}
+}
+
+if ($cfg['BC_APPS_DIR']) {
+    $svc['volumes'] += @{
+        type      = 'bind'
+        source    = $cfg['BC_APPS_DIR']
+        target    = '/bc/apps'
+        read_only = $true
+        bind      = @{}
+    }
+}
+
+# A path base served by UsePathBase has no trailing-slash redirect of its own,
+# the way an IIS virtual directory does. Without one the browser can sit on
+# /<name> and the web client's client-side navigation concatenates to
+# /<name>SignIn. The public host is written out rather than captured from the
+# request, because a devtunnel relay rewrites Host to localhost before the
+# proxy sees it.
+$slashRegex = '^[a-z]+://[^/]+/{0}(\?.*)?$' -f $Name
+# $$ survives docker compose's own interpolation and reaches traefik as $1.
+$slashTo    = 'https://{0}/{1}/$${{1}}' -f $cfg['PUBLIC_HOST'], $Name
+
 $svc['labels'] = @{
     'traefik.enable'                                                    = 'true'
     "traefik.http.routers.$Name.rule"                                   = "PathPrefix(``/$Name``)"
@@ -162,16 +225,73 @@ $svc['labels'] = @{
     "traefik.http.services.$Name.loadbalancer.server.scheme"            = 'https'
     "traefik.http.services.$Name.loadbalancer.serverstransport"         = 'bc-transport@file'
     "traefik.http.services.$Name.loadbalancer.passhostheader"           = 'true'
+    "traefik.http.routers.$Name.priority"                               = '100'
+    "traefik.http.middlewares.$Name-slash.redirectregex.regex"          = $slashRegex
+    "traefik.http.middlewares.$Name-slash.redirectregex.replacement"    = $slashTo
+    "traefik.http.routers.$Name-slash.rule"                             = "Path(``/$Name``)"
+    "traefik.http.routers.$Name-slash.priority"                         = '200'
+    "traefik.http.routers.$Name-slash.entrypoints"                      = 'web'
+    "traefik.http.routers.$Name-slash.middlewares"                      = "$Name-slash"
+    "traefik.http.routers.$Name-slash.service"                          = $Name
     'bc.instance'                                                       = $Name
 }
 
-# Named volumes: the artifact cache is shared across instances because it is a
-# read-only download cache and re-fetching it per instance costs gigabytes. The
-# service and assembly-cache volumes stay project-scoped so instances stay
-# independent.
-$volumes = @{ 'bc-artifacts' = @{ external = $true; name = 'bc-artifacts' } }
+# The agent web client is a second front end on the same container, so it is a
+# second router and service rather than a second instance. Its prefix is longer
+# than the main one's and would win on rule length alone; the priorities are
+# explicit so that stays true if either rule changes.
+if ($AgentWebClient) {
+    $agent           = "${Name}dev"
+    $agentSlashRegex = '^[a-z]+://[^/]+/{0}(\?.*)?$' -f $agent
+    $agentSlashTo    = 'https://{0}/{1}/$${{1}}' -f $cfg['PUBLIC_HOST'], $agent
+    $svc['labels'] += @{
+        "traefik.http.routers.$agent.rule"                            = "PathPrefix(``/$agent``)"
+        "traefik.http.routers.$agent.priority"                        = '150'
+        "traefik.http.routers.$agent.entrypoints"                     = 'web'
+        "traefik.http.routers.$agent.service"                         = $agent
+        "traefik.http.routers.$agent.middlewares"                     = 'publichost@file'
+        "traefik.http.services.$agent.loadbalancer.server.port"       = $cfg['BC_WEBCLIENT_AGENT_PORT']
+        "traefik.http.services.$agent.loadbalancer.server.scheme"     = 'https'
+        "traefik.http.services.$agent.loadbalancer.serverstransport"  = 'bc-transport@file'
+        "traefik.http.services.$agent.loadbalancer.passhostheader"    = 'true'
+        "traefik.http.middlewares.$agent-slash.redirectregex.regex"       = $agentSlashRegex
+        "traefik.http.middlewares.$agent-slash.redirectregex.replacement" = $agentSlashTo
+        "traefik.http.routers.$agent-slash.rule"                      = "Path(``/$agent``)"
+        "traefik.http.routers.$agent-slash.priority"                  = '250'
+        "traefik.http.routers.$agent-slash.entrypoints"               = 'web'
+        "traefik.http.routers.$agent-slash.middlewares"               = "$agent-slash"
+        "traefik.http.routers.$agent-slash.service"                   = $agent
+    }
+}
+
+# Named volumes: the artifact cache is shared, but only between instances of the
+# same BC version. The entrypoint wipes the cache whenever it does not match the
+# version it was asked for, so one shared volume means a second instance on a
+# different version silently destroys the first one's artifacts. Keying the volume
+# by version keeps the sharing where it pays and stops the collision.
+$artifactVolume = if ($cfg['BC_VERSION']) { "bc-artifacts-$($cfg['BC_VERSION'])" } else { 'bc-artifacts' }
+$volumes = @{ $artifactVolume = @{ external = $true; name = $artifactVolume } }
 foreach ($v in @($svc.volumes | Where-Object { $_.type -eq 'volume' })) {
-    if ($v.source -ne 'bc-artifacts') { $volumes[$v.source] = @{} }
+    if ($v.source -eq 'bc-artifacts') { $v.source = $artifactVolume } else { $volumes[$v.source] = @{} }
+}
+if (-not (docker volume ls --format '{{.Name}}' | Where-Object { $_ -eq $artifactVolume })) {
+    docker volume create $artifactVolume | Out-Null
+}
+
+# RESTORE FROM DISK names a path on the SQL Server, and bc-mssql mounts the one
+# volume called bc-artifacts. An instance on its own per-version volume therefore
+# has no way to hand SQL its backup, and SQL restores whatever is in the shared
+# volume instead - the wrong version, without saying so. Mounting the shared volume
+# read-write as well gives the entrypoint somewhere to stage the backup that SQL
+# can actually read.
+if ($artifactVolume -ne 'bc-artifacts') {
+    $volumes['bc-artifacts'] = @{ external = $true; name = 'bc-artifacts' }
+    $svc['volumes'] += @{
+        type   = 'volume'
+        source = 'bc-artifacts'
+        target = '/bc/shared-artifacts'
+        volume = @{}
+    }
 }
 
 $doc = @{

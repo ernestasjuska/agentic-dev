@@ -13,6 +13,11 @@ One proxy, one published port, many backends. Apps opt in with docker labels,
 so nothing here needs editing when an app is added. `-PublicHost` and
 `-CertDir` are needed on the first run and remembered afterwards.
 
+A backend that is not a container opts in through a file instead. The script
+owns `dynamic/00-base.yml` and rewrites it on every run; every other file in
+`dynamic/` is read by the proxy and left alone, so put per-machine routers and
+services in a sibling file such as `dynamic/10-<app>.yml`.
+
 ## What it provides to backends
 
 Two pieces of shared configuration that backends reference by name:

@@ -10,7 +10,7 @@ Each instance is its own compose project named `bc-<name>` on the shared
 starting and stopping one never disturbs the others.
 
 ```
-pwsh ./scripts/bc-up.ps1 <name> [-BcRepo <path>] [-Json]
+pwsh ./scripts/bc-up.ps1 <name> [-BcRepo <path>] [-AgentWebClient] [-Json]
 ```
 
 ## Before the first instance
@@ -33,8 +33,25 @@ them:
 | `-SaPassword` | if no shared SQL yet | |
 | `-AadAppId`, `-AadTenantId`, `-AadUserUpn` | only for Entra sign-in | `-AadUserUpn` must be the **token's email claim**, not the directory UPN. |
 | `-HttpsPfxPassword` | if the backend serves TLS | Defaults to the `/certs/bc.pfx` mounted from the cert directory. |
+| `-AgentWebClient` | to let an agent drive the UI | Adds a second web client at `/<name>dev` on NavUserPassword. |
+| `-AppsDir` | to publish your own apps at boot | Directory of `.app` files, mounted read-only. Re-run to pick up new files. |
 
 Later runs need only the name.
+
+## Two ways in
+
+`/<name>` serves whatever sign-in the instance is configured for, Entra when
+the `-Aad*` parameters are set. `-AgentWebClient` adds `/<name>dev`, a second
+front end on the same service tier that always uses NavUserPassword with
+`BC_SERVER_USERNAME` / `BC_SERVER_PASSWORD`.
+
+That split exists because an agent has no Entra account, and switching the
+shared web client to NavUserPassword to let one in takes Entra away from every
+person who does have one. Both front ends show the same data.
+
+The instance also bind-mounts the repo's `scripts/` over `/bc/scripts`, so an
+edit to `entrypoint.sh` or `start-webclient.sh` applies on the next container
+start with no image rebuild.
 
 ## What it does
 
