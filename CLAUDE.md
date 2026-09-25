@@ -21,6 +21,7 @@ The owner uses four agents: Claude Code, Codex CLI, GitHub Copilot, OpenCode.
 ./scripts/sync.ps1 -Target C:\proj\foo -All -Agents claude    # everything, Claude layout only
 ./scripts/sync.ps1 -Global -Skills a                          # into ~/.claude/skills etc. instead of a project
 ./scripts/sync.ps1 -Rules                                     # rules/ -> ~/.codex/AGENTS.md (-Check reports drift)
+./scripts/sync.ps1 -AgentOwned -Rules                         # also install optional-rules/ into rules/ on this machine
 ```
 
 `-List` is the closest thing to a test suite. Run it after touching any `SKILL.md`.
@@ -79,6 +80,13 @@ New-Item -ItemType Junction -Path ~\.claude\rules -Target <repo>\rules
 Codex loads exactly one global file, `~/.codex/AGENTS.md`, and a pointer in it to the
 directory is not reliably followed, so `sync.ps1 -Rules` writes the rule bodies into that
 file. Editing a rule means re-running it; `-Rules -Check` exits 1 when that file is stale.
+
+`optional-rules/` holds rules that suit only a machine where agents are the only ones
+writing code, such as committing and opening pull requests unasked. Live reading is what
+makes the directory necessary: anything in `rules/` reaches every machine holding the
+junction, so these sit outside it and `-AgentOwned` copies them in, which is also how they
+reach the Codex file. The installed copies are gitignored. A new optional rule needs its
+name added to `.gitignore`, or the next commit turns it into a rule for every machine.
 
 The `.instructions.md` suffix and `applyTo` frontmatter are what Copilot needs to apply a
 file automatically. Claude Code reads every `.md` under the directory and loads any rule
