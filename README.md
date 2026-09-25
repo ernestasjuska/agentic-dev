@@ -11,6 +11,7 @@ Works with Claude Code, Codex CLI, GitHub Copilot and OpenCode. All four read th
 ```
 skills/<name>/SKILL.md    one skill per directory, the single source of truth
 rules/*.instructions.md   always-on agent rules, junctioned into ~/.claude/rules
+optional-rules/*.md       opt-in rules, copied into rules/ by sync.ps1 -AgentOwned
 scripts/sync.ps1          copies handpicked skills into a project or your user profile
 CLAUDE.md                 canonical repo guide (AGENTS.md + copilot-instructions point to it)
 ```
@@ -35,6 +36,10 @@ drift. A junction needs no elevation. Run it again on each new machine.
 Codex is the exception: it loads one global file, so `sync.ps1 -Rules` writes the rule
 bodies into `~/.codex/AGENTS.md`. Re-run it after editing a rule, and use
 `-Rules -Check` (exit code 1 when stale) to catch a forgotten run.
+
+Because every agent reads `rules/` live, a rule that belongs on some machines and not
+others cannot live there. Those go in `optional-rules/`, and `sync.ps1 -AgentOwned` copies
+them into `rules/` on the machines that want them. The copies are gitignored.
 
 ## Use it from another project
 

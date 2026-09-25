@@ -6,3 +6,6 @@
 
 # python byte-cache
 __pycache__/
+
+# opt-in rules, installed per machine by sync.ps1 -AgentOwned
+/rules/git.instructions.md

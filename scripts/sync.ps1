@@ -11,6 +11,7 @@
     ./scripts/sync.ps1 -Target C:\proj\foo -Check
     ./scripts/sync.ps1 -All -Global -Agents claude,codex
     ./scripts/sync.ps1 -Rules                        # rules/ -> ~/.codex/AGENTS.md
+    ./scripts/sync.ps1 -AgentOwned -Rules             # plus optional-rules/ -> rules/
 #>
 [CmdletBinding()]
 param(
@@ -39,13 +40,18 @@ param(
 
     # Write rules/ into ~/.codex/AGENTS.md, the one global instruction file Codex
     # loads. Combine with -Check to report drift without writing.
-    [switch]$Rules
+    [switch]$Rules,
+
+    # Install optional-rules/ into rules/, for a machine where agents are the only
+    # ones writing code. Combine with -Check to report what is missing.
+    [switch]$AgentOwned
 )
 
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $SkillsRoot = Join-Path $RepoRoot 'skills'
 $RulesRoot = Join-Path $RepoRoot 'rules'
+$OptionalRulesRoot = Join-Path $RepoRoot 'optional-rules'
 $NamePattern = '^[a-z0-9]+(-[a-z0-9]+)*$'
 
 function Write-Status {
@@ -175,6 +181,36 @@ function Build-CodexAgentsDoc {
         $parts += (($lines -join "`n").Trim())
     }
     ($parts -join "`n") + "`n"
+}
+
+# ---- opt-in rules -> rules/ ----------------------------------------------------
+
+# rules/ is read live by Claude Code, OpenCode and Copilot, so anything placed there
+# lands on every machine that holds the junction and no switch can hold it back. Rules
+# that only suit a machine where agents own the code live outside it and are copied in
+# per machine. .gitignore keeps the copies from being committed back as shared rules.
+if ($AgentOwned) {
+    $optional = @(Get-ChildItem -LiteralPath $OptionalRulesRoot -File -Filter '*.instructions.md' | Sort-Object Name)
+    if ($optional.Count -eq 0) { throw "No *.instructions.md files in $OptionalRulesRoot" }
+
+    Write-Host "`nOpt-in rules -> $RulesRoot`n"
+    $stale = 0
+    foreach ($f in $optional) {
+        $dest = Join-Path $RulesRoot $f.Name
+        $want = [IO.File]::ReadAllText($f.FullName)
+        $current = if (Test-Path -LiteralPath $dest) { [IO.File]::ReadAllText($dest) } else { $null }
+        if ($current -eq $want) { Write-Status 'in-sync' $f.Name 'DarkGray'; continue }
+        $stale++
+        if ($Check) { Write-Status ($null -eq $current ? 'missing' : 'drift') $f.Name 'Yellow'; continue }
+        [IO.File]::WriteAllText($dest, $want)
+        Write-Status ($null -eq $current ? 'added' : 'updated') $f.Name 'Green'
+    }
+    if ($Check -and $stale -gt 0) {
+        Write-Host "`n$stale difference(s) found.`n" -ForegroundColor Yellow
+        exit 1
+    }
+    Write-Host ''
+    if (-not $Rules) { exit 0 }
 }
 
 if ($Rules) {
