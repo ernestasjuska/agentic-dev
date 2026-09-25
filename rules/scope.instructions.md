@@ -8,10 +8,7 @@ Build what was asked for. Nothing adjacent, nothing anticipatory.
 
 Do not add, unless I asked for it: abstractions, interfaces or base classes; method
 overloads; defensive fallbacks; error swallowing; caches or lookup dictionaries; retry
-logic; config files; GitHub issues; draft pull requests; new files outside the agreed
-plan.
-
-A draft PR does not trigger the review bots. Open it ready for review.
+logic; config files; GitHub issues; new files outside the agreed plan.
 
 If you think something else needs doing, say so in one line and leave it undone. Write it
 to a backlog file only if I ask.
