@@ -35,6 +35,11 @@ param(
     [string]$Name,
     # Lines of the current boot to show when something failed.
     [int]$Tail = 20,
+    # Lines of container log to scan back through. BC logs OpenTelemetry at
+    # volume, so a healthy instance reaches millions of lines and dumping all of
+    # it costs minutes. The default covers a failing boot comfortably; raise it
+    # if the current boot started further back.
+    [int]$ScanLines = 300000,
     [switch]$Json
 )
 
@@ -58,11 +63,31 @@ $ports = @($hex | Where-Object { $_ } | ForEach-Object { [Convert]::ToInt32($_, 
 $expected = 7048, 7049, 7085
 $missing  = @($expected | Where-Object { $_ -notin $ports })
 
-$log = docker logs $container 2>&1
-$starts = @($log | Select-String -SimpleMatch 'Script started at')
-$boot = if ($starts) { $log | Select-Object -Skip ($starts[-1].LineNumber - 1) } else { $log }
+# The container log holds every boot and runs to millions of lines on a BC
+# instance that has been up a while. Do the scanning in grep rather than
+# pulling it all into PowerShell, which takes minutes instead of seconds.
+$logFile  = New-TemporaryFile
+$bootFile = New-TemporaryFile
+$bootIsolated = $false
+try {
+    docker logs --tail $ScanLines $container *>$logFile.FullName
+    $startLine = "$(bash -c "grep -n 'Script started at' '$($logFile.FullName)' | tail -1 | cut -d: -f1")".Trim()
+    if ($startLine) {
+        bash -c "tail -n +$startLine '$($logFile.FullName)' > '$($bootFile.FullName)'"
+        $bootIsolated = $true
+    } else {
+        # The boot marker is older than the scan window, which is normal on an
+        # instance that has been healthy for hours. Counts then cover the window
+        # rather than one boot, so say so instead of implying otherwise.
+        Copy-Item $logFile.FullName $bootFile.FullName -Force
+    }
 
-function Count([string]$pattern) { @($boot | Select-String -SimpleMatch $pattern).Count }
+    function Count([string]$pattern) {
+        [int](bash -c "grep -c -- '$pattern' '$($bootFile.FullName)' || true").Trim()
+    }
+    $failedHosts = @(bash -c "grep -o 'API type [A-Za-z]* and address [^ ]*' '$($bootFile.FullName)' | sort -u" ) |
+        Where-Object { $_ }
+    $bootTail = @(bash -c "tail -n $Tail '$($bootFile.FullName)'")
 
 $result = [ordered]@{
     container            = $container
@@ -75,8 +100,7 @@ $result = [ordered]@{
     directoryNotFound    = Count 'DirectoryNotFoundException'
     hostStartFailures    = Count 'Failed to start service with CLR type'
     serviceStartFailed   = Count 'MicrosoftDynamicsNavServer failed to start'
-    failedHosts          = @($boot | Select-String -Pattern 'API type \w+ and address \S+' -AllMatches |
-                             ForEach-Object { $_.Matches.Value } | Sort-Object -Unique)
+    failedHosts          = $failedHosts
 }
 
 if ($Json) { [pscustomobject]$result | ConvertTo-Json -Depth 5; return }
@@ -86,7 +110,8 @@ Write-Host "  container   $container   health=$health restarts=$restarts"
 Write-Host "  listening   $($ports -join ' ')"
 if ($missing) { Write-Host "  MISSING     $($missing -join ' ')  <- the NST opened no service port" }
 Write-Host ""
-Write-Host "  current boot only:"
+$scope = if ($bootIsolated) { "current boot only" } else { "last $ScanLines lines; boot marker is older than the window" }
+Write-Host "  $scope" 
 foreach ($k in 'addressInUse','directoryNotFound','hostStartFailures','serviceStartFailed') {
     Write-Host ("    {0,-20} {1}" -f $k, $result[$k])
 }
@@ -98,7 +123,10 @@ if ($result.failedHosts) {
 if ($missing -and $Tail -gt 0) {
     Write-Host ""
     Write-Host "  last $Tail lines of this boot:"
-    $boot | Select-Object -Last $Tail | ForEach-Object { Write-Host "    $($_.ToString().Substring(0, [Math]::Min(140, $_.ToString().Length)))" }
+    $bootTail | ForEach-Object { Write-Host "    $($_.Substring(0, [Math]::Min(140, $_.Length)))" }
 }
 Write-Host ""
 if ($missing) { exit 1 }
+} finally {
+    Remove-Item $logFile.FullName, $bootFile.FullName -ErrorAction SilentlyContinue
+}
