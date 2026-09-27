@@ -45,6 +45,12 @@ the `-Aad*` parameters are set. `-AgentWebClient` adds `/<name>dev`, a second
 front end on the same service tier that always uses NavUserPassword with
 `BC_SERVER_USERNAME` / `BC_SERVER_PASSWORD`.
 
+The second front end only exists on repo branches that implement it. The flag
+always writes `BC_WEBCLIENT_AGENT=1` and a path base to the manifest, but if
+`entrypoint.sh` and `start-webclient.sh` do not read them nothing starts and
+`/<name>dev` returns 404. Confirm with
+`grep -l BC_WEBCLIENT_AGENT <repo>/scripts/*.sh` before relying on it.
+
 That split exists because an agent has no Entra account, and switching the
 shared web client to NavUserPassword to let one in takes Entra away from every
 person who does have one. Both front ends show the same data.
@@ -69,6 +75,17 @@ start with no image rebuild.
 4. Waits for the container healthcheck and then for the web client, which
    starts tens of seconds later.
 
+## Testing versions in sequence
+
+```
+pwsh ./scripts/bc-reset-for-version.ps1 -ArtifactVolume bc-artifacts-<version>
+```
+
+Clears the two things that make the next version fail to start: the shared
+`CRONUS` database left at the previous version's schema, and the shared
+artifact volume still holding the previous version's backup. Run it between
+`bc-down` and `bc-up` when moving from one BC version to another.
+
 ## Pitfalls
 
 - **Entra redirect URIs are per path.** An instance at `/bc28/` needs
@@ -79,5 +96,33 @@ start with no image rebuild.
   costs gigabytes. The service and assembly-cache volumes stay per instance.
 - **A recreate forces a fresh sign-in.** BC does not persist DataProtection
   keys, so auth cookies stop validating.
+- **The proxy expects the web client to serve TLS.** `bc-up` labels the service
+  `scheme=https` with `bc-transport@file`. A branch whose `start-webclient.sh`
+  has no HTTPS listener serves plain HTTP, and Traefik answers 500 with
+  `tls: first record does not look like a TLS handshake`. The listener and the
+  `HTTPSYS_STUB_HTTPS_PFX` plumbing live together in the web-client-over-Traefik
+  branch, and the stub half is compiled in, so adding it needs an image rebuild.
+- **`BC_AAD_APP_ID` can arrive from the repo `.env`.** `bc-up` generates the
+  instance compose with `docker compose config`, which reads the repo's `.env`,
+  so an app id you never passed still lands in the instance and silently selects
+  `AccessControlService`. The manifest will not show it. For NavUserPassword,
+  pass `BC_AAD_APP_ID=` empty on the `bc-up` invocation.
+- **Instances share the database name.** The manifest records
+  `BC_DATABASE=CRONUS_<name>` but the generated compose does not pass it through,
+  so every instance uses `CRONUS`. Start a second version against the first one's
+  database and the NST dies with "must be converted". Drop `CRONUS` between
+  versions.
+- **The shared artifact volume holds one version at a time.** SQL Server reads
+  the backup from it, mounted at `/bc/artifacts` read-only, while the BC
+  container sees it at `/bc/shared-artifacts`. The next instance restores the
+  previous version's `BusinessCentral-W1.bak` and the NST reports "must be
+  converted". Re-stage it from the per-version volume rather than emptying it:
+  nothing repopulates an empty one and the restore then fails with
+  `Cannot open backup device`.
+- **`CustomSettings.config` is patched only on a fresh service-tier setup.** On
+  restart the entrypoint logs "Service tier already set up" and skips it, so an
+  edit to `entrypoint.sh` does not reach an existing instance however many times
+  you restart. Read the live config back to check, or remove the instance's
+  `bc-service` volume to force the rebuild.
 - Report the endpoints from the `bc-describe` skill rather than assuming
   default ports. Only the first instance gets the familiar 7049.

@@ -9,3 +9,8 @@ __pycache__/
 
 # opt-in rules, installed per machine by sync.ps1 -AgentOwned
 /rules/git.instructions.md
+
+# playwright-core is installed on first use by bc-webclient-signin.ps1
+skills/*/scripts/node_modules/
+skills/*/scripts/package-lock.json
+skills/*/scripts/package.json

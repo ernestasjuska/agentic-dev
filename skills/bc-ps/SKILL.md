@@ -16,6 +16,21 @@ services are listed separately because no instance owns them.
 Columns: instance, state, health, port base, web client URL, and the
 BcOnLinux checkout the instance was created from.
 
+## When one is unhealthy
+
+```
+pwsh ./scripts/bc-diagnose.ps1 <name>
+```
+
+An unhealthy BC container almost always means the NST started and opened no
+service port, and the container log still holds every previous boot. This
+isolates the current boot at the last entrypoint start, reports which ports are
+actually listening, and counts the signatures that explain it: two API hosts
+wanting one port, a host calling File.Delete on a missing directory, and which
+API type failed to bind. Exit code is non-zero when 7048, 7049 or 7085 is
+missing. 7045 is forced off by the entrypoint and 7047 is optional, so neither
+counts as missing.
+
 ## Reading the output
 
 - `state = absent` with a manifest present means the instance is configured

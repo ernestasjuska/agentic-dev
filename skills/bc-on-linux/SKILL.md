@@ -175,5 +175,20 @@ returns 404 because `System.Drawing.Common` throws unconditionally on Linux.
 - **One BC per docker host unless you namespace it.** Compose derives the project
   name from the directory and the ports are fixed, so a second stack tears the
   first one down mid-run. Give each `-p <name>` and its own port set.
+- **A silent NST that opens no port means two hosts wanted one port.** BC serves
+  several API endpoints from one port separated by URL path, for example
+  `http://+:7048/BC/ODataV4` next to `http://+:7048/BC/api/webhooks`. HTTP.SYS
+  routes those by prefix; Kestrel cannot bind a port twice, so the second host
+  throws `AddressInUseException` and the whole service start fails. The symptom
+  is not an error at the top of the log: it is no listener on 7045, 7047, 7048,
+  7049 or 7085, every extension publish returning HTTP 000, and a container that
+  never goes healthy. Seen on BC 30. The HttpSys stub already splits ports for
+  the hosts that go through it; these go to Kestrel directly and bypass it.
+- **`ManagementApiServicesEnabled` has to be off on Linux.** `StartInternal`
+  calls `File.Delete` on the local Unix socket path, and `File.Delete` throws
+  `DirectoryNotFoundException` when the parent directory is missing rather than
+  ignoring it. That one host failing takes the entire service start with it. The
+  entrypoint already forces the sibling `ManagementServicesEnabled` off for a
+  different Linux crash.
 - `docker compose down` keeps the artifact cache; `down -v` forces a full
   re-download.
