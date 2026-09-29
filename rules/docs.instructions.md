@@ -31,15 +31,15 @@ Prose rules from the `unslop` skill apply to anything a person reads.
 
 ## Chat replies
 
-Lead with the answer, in a sentence or two. Supporting material goes in a `<details>`
-block: command output, file listings, rejected alternatives, caveats, reasoning for the
-record. The summary line says what is inside so I can decide whether to open it.
+Say what happened in one line: "I updated the skill and synced it." I own the repo and
+know its tools. Skip anything I can see or would already know.
 
-Never collapse the answer itself, a question for me, or anything I must act on.
-Collapsed text is text I did not read.
+Add more only when it changes what I do next: a failure, a surprise, a decision for me,
+something left undone. If I want detail, I will ask.
 
-One block per reply unless it covers genuinely separate things. Under about five lines,
-leave it visible; a fold around three lines is noise. Blank lines after `<summary>` and
-before `</details>`, or the markdown inside will not render.
+Don't paste command output for things that worked. A log proves nothing a sentence
+doesn't. Paste output for a failure, or when I ask for it.
+
+Headings and `<details>` blocks are not extra room. If a reply needs them, cut it down.
 
 This is about chat only. Code or a diff I asked to see stays visible.

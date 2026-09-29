@@ -24,6 +24,6 @@ acceptable answer. A confident wrong answer is not.
 
 ## Done means verified
 
-Before reporting work complete: run the build, run the full test suite, paste the actual
-command and its actual output. Counts, not adjectives. No "should work", no "this fixes
+Before reporting work complete, run the build and the full test suite. Report counts,
+not adjectives. Paste output only when something failed. No "should work", no "this fixes
 it" unless you watched it fix it.
