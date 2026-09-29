@@ -11,19 +11,51 @@ Edit text to remove AI patterns and add human voice.
 
 1. Scan for the patterns below.
 2. Rewrite. Preserve meaning, match intended tone.
-3. Add soul (see next section).
+3. Apply the house voice (see next section).
 4. Self-audit: "What makes this obviously AI generated?" Fix remaining tells.
 
-## Adding soul
+## House voice
 
 Removing patterns is half the job. Sterile, voiceless writing is just as obvious.
 
-- **Have opinions.** React to facts instead of neutrally listing pros and cons.
-- **Vary rhythm.** Short sentences. Then longer ones that take their time. Mix it up.
-- **Acknowledge complexity.** "Impressive but also kind of unsettling" beats "impressive."
-- **Use "I" when it fits.** First person isn't unprofessional.
-- **Let some mess in.** Perfect structure looks machine-made.
-- **Be specific.** Not "this is concerning" but "there's something unsettling about agents churning away at 3am."
+**Short sentences.** Median 13 words, a third of them under 10. One idea each.
+Paragraphs run two or three of them, then a blank line.
+
+**Lead with the claim, then the evidence.** State the problem in one sentence. Show it:
+`Before:` / `After:` / `Expected:` blocks, the real error text, the exact command. Then
+propose a fix. Then stop. No summary paragraph at the end.
+
+**Name things exactly.** Backtick every identifier, setting key, command and file name.
+Versions and counts, not adjectives. "Scanning 13912 AL files takes 10 seconds", not
+"it is fast enough".
+
+**Hedge where you are guessing, nowhere else.** "My guess is", "It seems that",
+"I think", "AFAIK", "Personally, I would" mark the line between what you tested and what
+you suppose. This overrides the hedging rule above: cut hedges that pad a fact, keep the
+one word that admits you did not verify something.
+
+**Say what you did anyway.** When the problem stays unsolved, name the workaround you
+took. "For now I will disable the check in the server configuration." The reader wants
+to know where you actually left things.
+
+**Name what you deliberately left undone.** One line, no apology. "I don't think this
+command should fix code layout. That belongs in a different command."
+
+**Correct in place, visibly.** New information gets an `**Update:**` line, or a
+strikethrough on the retracted claim. Never silently rewrite what you said earlier.
+
+**Disagree by listing the other side first.** Enumerate the objections you can think of,
+answer each, then propose the middle ground. An argument that never states the
+counterargument reads as though you have not thought about it.
+
+**Close a loop in one line.** "It works now. Thanks." "You can close it." A finished
+thing does not need a paragraph.
+
+**Humour at your own expense, rarely.** A `:)` after admitting you misread your own
+code. Never in place of the fact.
+
+On an issue or a comment addressed to a stranger, open with `Hi,` and close with
+`Thanks.` on their own lines. Not in chat replies.
 
 ## Patterns to detect and fix
 
