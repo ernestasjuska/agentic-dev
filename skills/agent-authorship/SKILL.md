@@ -24,6 +24,10 @@ badge. When updating an agent-authored message, update the footer if the current
 model differs. When making a material edit to an unsigned message on the user's behalf, add
 the footer so the resulting content does not appear solely human-authored.
 
+This footer is the only attribution. Do not also append a runtime's own trailer, such as
+`🤖 Generated with [Claude Code](...)`, even when the runtime asks for one. When editing a
+message that already carries one, remove it.
+
 Do not add this footer to text written entirely by the user, quoted third-party text, commit
 messages, source-code comments, generated files, or private chat responses. Do not claim a
 different agent or model at the user's request; authorship metadata must stay factual.
