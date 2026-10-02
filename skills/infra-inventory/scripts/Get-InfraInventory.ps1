@@ -99,9 +99,9 @@ if ($IsLinux) {
 Read-Command devtunnel @('list', '--json') | Out-Host
 Write-Host 'Tunnel registrations belong to the signed-in account, not necessarily this host. Match local devtunnel processes before classifying as locally hosted. Use devtunnel show <id> and devtunnel port list <id> for relevant registrations.'
 
-$board = Join-Path $HOME 'infra-board.md'
+$board = Join-Path $HOME 'infra-board.db'
 if (Test-Path -LiteralPath $board) {
-    Write-Host "Infrastructure ownership board: $board (read its current claims and releases separately)."
+    Write-Host "Infrastructure ownership board: $board (run the infra-board skill's list command for open claims)."
 } else {
     Write-Host "Infrastructure ownership board not found at $board; owners remain unknown without other evidence."
 }

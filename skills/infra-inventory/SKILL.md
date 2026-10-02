@@ -16,8 +16,8 @@ The script collects candidates, not proof of agent ownership. Classify unknown
 services and processes using their executable, working directory and listeners.
 Do not classify every descendant of T3 Code as baseline: agents launch apps too.
 
-Use the infrastructure board, when available, to identify owners and purpose.
-Live inspection takes precedence over its inventory. Do not infer that an
+Use the open claims from the infra-board skill to identify owners and purpose.
+Live inspection takes precedence over them. Do not infer that an
 unknown owner or an idle resource makes it safe to delete.
 
 Show names, state, ports, resource usage where available, and cleanup candidates.

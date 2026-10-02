@@ -29,11 +29,10 @@ Anything that outlives your task belongs to the admin: a new database server, a
 reverse-proxy route, a devtunnel, an Aspire app left running, a container that should
 survive a reboot. Ask for it instead of building your own.
 
-Ernestas owns this machine, and one agent session at a time acts as its IT admin. The board
-at `~/infra-board.md` is where that is settled: it carries the current inventory of shared
-services and who owns each, and the posting format is in the file. Read it before you build
-anything, append a `request` block when you need something, append a `claim` block when you
-started something long-lived so the next agent neither duplicates nor stops it.
+Ernestas owns this machine, and one agent session at a time acts as its IT admin. The
+`infra-board` skill records who owns what: list its open claims before you build anything,
+post a `request` when you need something, and post a `claim` when you started something
+long-lived so the next agent neither duplicates nor stops it.
 
 Nothing polls the board, so when you are blocked say it in chat as well and Ernestas routes
 it. Do not provision shared infrastructure yourself while you wait, and do not look for the

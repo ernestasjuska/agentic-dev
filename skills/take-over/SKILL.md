@@ -5,7 +5,7 @@ description: Take over a stalled T3 Code thread from a different working thread 
 
 # Take over a stalled T3 thread
 
-Base directory for this skill: /home/t3admin/.claude/skills/take-over — all
+Base directory for this skill: /home/agent/projects/.claude/skills/take-over — all
 `scripts/takeover.py` paths below are relative to it.
 
 A stalled thread never resumes on its own: its turn sits in `error` and its
